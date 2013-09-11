@@ -145,7 +145,9 @@ function startReggieServer(done) {
 }
 
 function stopReggieServer(done) {
-  if (reggieProcess == null) return;
+  if (reggieProcess === null) {
+    return;
+  }
   debug('Stoppping reggie server...');
   reggieProcess.kill();
   reggieProcess.on('exit', function() { done(); });
