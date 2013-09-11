@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
-var fs = require('fs')
-  , util = require('util')
-  , npm = require('npm')
-  , pkginfo = require('pkginfo')(module)
-  , request = require('request')
-  , optimist = require('optimist')
-  ;
+var fs = require('fs'),
+  util = require('util'),
+  npm = require('npm'),
+  pkginfo = require('pkginfo')(module),
+  request = require('request'),
+  optimist = require('optimist');
 
 var argv = optimist
     .usage('reggie publish             --> Publish current module (from module root)\n' +
@@ -36,7 +35,7 @@ if (argv.command === 'publish') {
       // as described here: https://npmjs.org/api/pack.html
       var packagejson = JSON.parse(fs.readFileSync('package.json'));
       var name = packagejson.name;
-      var version = packagejson.version
+      var version = packagejson.version;
       var packageFile = name + '-' + version + '.tgz';
       var packageUrl = rootUrl + '/package/' + name + '/' + version;
       fs.createReadStream(packageFile).pipe(request.put(packageUrl, function (err, resp, body) {
@@ -48,26 +47,25 @@ if (argv.command === 'publish') {
           console.error('uh oh, something unexpected happened (' + resp.statusCode + ')');
         }
         fs.unlink(packageFile);
-        console.log("done")
+        console.log("done");
       }));
     });
-
-  })
+  });
 }
 else if (argv.command === 'info' && argv.param1) {
   var url = argv.url + '/info/' + argv.param1;
   request({
     uri: url,
     json: true
-  }, handleDataResponse)
-}  
+  }, handleDataResponse);
+}
 else if (argv.command === 'index') {
   var url = argv.url + '/index';
   request({
     uri: url,
     json: true
-  }, handleDataResponse)
-}  
+  }, handleDataResponse);
+}
 else {
   optimist.showHelp();
 }
