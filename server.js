@@ -11,6 +11,8 @@ var restify = require('restify'),
   semver = require('semver'),
   optimist = require('optimist');
 
+var publisherList = require('./publishers.json').publishers;
+
 // ----------------------------------------------------------------------------
 // options parsing
 // ----------------------------------------------------------------------------
@@ -146,9 +148,20 @@ server.get('/-/all/since', listAction);
 server.get('/-/all', listAction);
 
 server.put('/:name', function (req, res) {
-  // TODO verify that req.params.name is the same as req.body.name
-  data.updatePackageMetadata(req.body);
-  res.json(200, { ok: true });
+  var cookies = new Cookies(req, res);
+  var authSession = cookies.get('AuthSession');
+
+  if (authSession === 'publisher') {
+    data.updatePackageMetadata(req.body);
+    res.json(200, { ok: true });
+  }
+  else {
+    return res.json(403, {
+      ok: false,
+      id: '-',
+      rev: '1-0'
+    });
+  }
 });
 
 function notFound(res) {
@@ -238,35 +251,59 @@ function listAction(req, res) {
 }
 
 server.put('/:name/-/:filename/-rev/:rev', function (req, res) {
-  var filename = req.params.filename;
-  var rand = Math.floor(Math.random()*4294967296).toString(36);
-  var tempPackageFile = path.join(argv.data, "temp", rand + '-' + filename);
-  fs.writeFile(tempPackageFile, req.body, function(err) {
-    if (err) {
-      console.log('Cannot save package to a temp file %s: %s', tempPackageFile, err.message);
-      return res.json(500, { error: 'internal_server_error', reason: err.toString() });
-    }
-    data.loadPackage(tempPackageFile, function(err) {
+  var cookies = new Cookies(req, res);
+  var authSession = cookies.get('AuthSession');
+
+  if (authSession === 'publisher') {
+    var filename = req.params.filename;
+    var rand = Math.floor(Math.random()*4294967296).toString(36);
+    var tempPackageFile = path.join(argv.data, "temp", rand + '-' + filename);
+    fs.writeFile(tempPackageFile, req.body, function(err) {
       if (err) {
-        console.error('Error loading package from upload: ' + (err.message || err));
-        fs.unlink(tempPackageFile);
-        return res.json(400, { error: 'bad_request', reason: 'package file cannot be read'});
+        console.log('Cannot save package to a temp file %s: %s', tempPackageFile, err.message);
+        return res.json(500, { error: 'internal_server_error', reason: err.toString() });
       }
-      return res.json(201, {
-        ok: true,
-        id: '-',
-        rev: '1-0'
+      data.loadPackage(tempPackageFile, function(err) {
+        if (err) {
+          console.error('Error loading package from upload: ' + (err.message || err));
+          fs.unlink(tempPackageFile);
+          return res.json(400, { error: 'bad_request', reason: 'package file cannot be read'});
+        }
+        return res.json(201, {
+          ok: true,
+          id: '-',
+          rev: '1-0'
+        });
       });
     });
-  });
+  }
+  else {
+    return res.json(403, {
+      ok: false,
+      id: '-',
+      rev: '1-0'
+    });
+  }
 });
 
 server.put('/:name/:version/-tag/:tag', function(req, res) {
-  res.json(201, {
-    ok: true,
-    id: req.params.tag,
-    rev: '1-0'
-  });
+  var cookies = new Cookies(req, res);
+  var authSession = cookies.get('AuthSession');
+
+  if (authSession === 'publisher') {
+    res.json(201, {
+      ok: true,
+      id: req.params.tag,
+      rev: '1-0'
+    });
+  }
+  else {
+    return res.json(403, {
+      ok: false,
+      id: '-',
+      rev: '1-0'
+    });
+  }
 });
 
 server.get('/:name/-/:file', function(req, res) {
@@ -292,11 +329,11 @@ server.put(fix('/-/user/:user'), function(req, res) {
 });
 
 server.post('/_session', function(req, res) {
-  // TODO - verify login & password
-
-  var cookies = new Cookies(req, res);
-  // refresh auth session in the client or set a new 'dummy' one
-  cookies.set('AuthSession', cookies.get('AuthSession') || 'dummy');
+  if (isPublisher(req.params.name)) {
+    var cookies = new Cookies(req, res);
+    // refresh auth session in the client or set a new 'dummy' one
+    cookies.set('AuthSession', cookies.get('AuthSession') || 'publisher');
+  }
 
   res.json(200, {
     ok: true,
@@ -311,6 +348,8 @@ server.pre(function (req, res, next) {
   console.log(JSON.stringify(req.headers, null, 2));
   console.log('> %s %s', res.statusCode, res.statusText);
   console.log();
+
+  console.log(res.headers());
   next();
 });
 /**/
@@ -384,4 +423,13 @@ function returnPackageByRange (name, range, res) {
   });
 }
 
+function isPublisher(username) {
+  for (var i = 0; i < publisherList.length; i++) {
+    if (username === publisherList[i]) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
