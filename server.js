@@ -9,9 +9,17 @@ var restify = require('restify'),
   rimraf = require('rimraf'),
   mkdirp = require('mkdirp'),
   semver = require('semver'),
-  optimist = require('optimist');
+  optimist = require('optimist'),
+  logger = require('winston');
 
+// Read in the list of users allowed to publish 
 var publisherList = require('./publishers.json').publishers;
+
+// Set up logging
+logger.add(logger.transports.File, {
+  filename: 'reggie.log', 
+  json: false 
+});
 
 // ----------------------------------------------------------------------------
 // options parsing
@@ -43,17 +51,18 @@ if (argv.h) {
 
 var config = {
   dataDirectory: argv.data,
-  registryUrl: normalizeUrl(argv.url || 'http://localhost:' + argv.p + '/')
+  registryUrl: normalizeUrl(argv.url || 'http://localhost:' + argv.p + '/'),
+  logger: logger
 };
 
 var Data = require('./lib/data');
 var data = new Data(config);
 
 data.init(function (err) {
-  console.log("Starting to load packages in " + data._packagesDir);
+  logger.info("Starting to load packages in " + data._packagesDir);
   data.reloadPackages(function (err) {
     if (err) throw err;
-    console.log("Done auto-loading packages");
+    logger.info("Done auto-loading packages");
   });
 });
 
@@ -84,13 +93,13 @@ server.put('/package/:name/:version', function (req, res, next) {
   // write the tar file. Don't combine the streamed gzip and untar on upload just yet...
   fs.writeFile(tempPackageFile, req.body, function(err) {
     if (err) {
-      console.error("Unexpected error when accepting package upload: " + (err.message || err));
+      logger.error("Unexpected error when accepting package upload: " + (err.message || err));
       return res.send(err, 500);
     }
 
     data.loadPackage(tempPackageFile, name, version, function (err) {
       if (err) {
-        console.error("Error loading package from upload: " + (err.message || err));
+        logger.error("Error loading package from upload: " + (err.message || err));
         fs.unlink(tempPackageFile);
         return res.send(err, 500);
       }
@@ -107,7 +116,7 @@ server.del('/package/:name/:version', function (req, res, next) {
 
   data.deletePackage(name, version, function (err) {
     if (err) {
-      console.error("Error deleting package " + name + "@" + version + ": " + (err.message || err));
+      logger.error("Error deleting package " + name + "@" + version + ": " + (err.message || err));
       return res.send(err, 500);
     }
     res.send(200);
@@ -260,15 +269,17 @@ server.put('/:name/-/:filename/-rev/:rev', function (req, res) {
     var tempPackageFile = path.join(argv.data, "temp", rand + '-' + filename);
     fs.writeFile(tempPackageFile, req.body, function(err) {
       if (err) {
-        console.log('Cannot save package to a temp file %s: %s', tempPackageFile, err.message);
+        logger.error('Cannot save package to a temp file %s: %s', tempPackageFile, err.message);
         return res.json(500, { error: 'internal_server_error', reason: err.toString() });
       }
       data.loadPackage(tempPackageFile, function(err) {
         if (err) {
-          console.error('Error loading package from upload: ' + (err.message || err));
+          logger.error('Error loading package from upload: ' + (err.message || err));
           fs.unlink(tempPackageFile);
           return res.json(400, { error: 'bad_request', reason: 'package file cannot be read'});
         }
+
+        logger.info(tempPackageFile + ' published');
         return res.json(201, {
           ok: true,
           id: '-',
@@ -333,6 +344,7 @@ server.post('/_session', function(req, res) {
     var cookies = new Cookies(req, res);
     // refresh auth session in the client or set a new 'dummy' one
     cookies.set('AuthSession', cookies.get('AuthSession') || 'publisher');
+    logger.info('Session initiated for ' + req.params.name);
   }
 
   res.json(200, {
@@ -344,20 +356,21 @@ server.post('/_session', function(req, res) {
 
 /* Middleware for logging all incoming requests *
 server.pre(function (req, res, next) {
-  console.log('< %s %s', req.method, req.url);
-  console.log(JSON.stringify(req.headers, null, 2));
-  console.log('> %s %s', res.statusCode, res.statusText);
-  console.log();
+  logger.info('< %s %s', req.method, req.url);
+  logger.info(JSON.stringify(req.headers, null, 2));
+  logger.info('> %s %s', res.statusCode, res.statusText);
+  logger.info();
 
-  console.log(res.headers());
+  logger.info(res.headers());
   next();
 });
 /**/
 
 server.listen(argv.port, function() {
-  console.log('Reggie listening at %s', server.url);
-  console.log('NPM registry URL:\n  %s\n', config.registryUrl);
+  logger.info('Reggie listening at %s', server.url);
+  logger.info('NPM registry URL:\n  %s\n', config.registryUrl);
 });
+
 
 // ----------------------------------------------------------------------------
 // register permutations of gt,lt,gte,lte routes for semver magic 
@@ -366,11 +379,9 @@ server.listen(argv.port, function() {
 var ops = [['gt', '>'], ['lt', '<'], ['gte', '>='], ['lte', '<=']];
 
 ops.forEach(function (op1) {
-  //console.log (op1);
   registerOp(op1);
   ops.forEach(function (op2) {
     if (op1 != op2) {
-      //console.log(op1, op2);
       registerOp(op1, op2);
     }
   });
@@ -378,7 +389,6 @@ ops.forEach(function (op1) {
 
 function registerOp (op1, op2) {
   if (!op2) {
-    //console.log('/package/:name/' + op1[0] + '/:v1')
     server.get('/package/:name/' + op1[0] + '/:v1', function (req, res, next) {
       var name = req.params.name;
       var v1 = req.params.v1;
@@ -387,7 +397,6 @@ function registerOp (op1, op2) {
     });
   }
   else {
-    //console.log('/package/:name/' + op1[0] + '/:v1/' + op2[0] + '/:v2')
     server.get('/package/:name/' + op1[0] + '/:v1/' + op2[0] + '/:v2', function (req, res, next) {
       var name = req.params.name;
       var v1 = req.params.v1;
@@ -400,7 +409,7 @@ function registerOp (op1, op2) {
 
 function returnPackageByRange (name, range, res) {
   var version = semver.maxSatisfying(data.whichVersions(name), range);
-  console.log("semver range calculation of (" + name, range + ")  ==> ", version);
+  logger.info("semver range calculation of (" + name, range + ")  ==> ", version);
 
   if (!version) {
     return res.send(404);
@@ -412,7 +421,7 @@ function returnPackageByRange (name, range, res) {
 
   data.openPackageStream(name, version, function (err, stream) {
     if (err) {
-      console.error("Error streaming package: " + (err.message || err));
+      logger.error("Error streaming package: " + (err.message || err));
       res.send(err, 500);
     }
     stream
