@@ -448,29 +448,36 @@ function isPublisher(username) {
 process.on('uncaughtException', function(err) {
   logger.error('Caught exception: ' + err);
 
-  var nodemailer = require('nodemailer');
+  if (configs.adminEmails.length > 0) {
+    var nodemailer = require('nodemailer');
 
-  var smtpTransport = nodemailer.createTransport('SMTP', {
-    host: configs.smtpHost,
-    port: configs.smtpPort
-  });
+    var smtpTransport = nodemailer.createTransport('SMTP', {
+      host: configs.smtpHost,
+      port: configs.smtpPort
+    });
 
-  var mailOptions = {
-    from: 'Reggie Server <' + configs.smtpSender + '>',
-    to: configs.adminEmails.join(';'),
-    subject: 'Exception!',
-    text: err.toString() + '\n\n' + err.stack
-  };
+    var mailOptions = {
+      from: 'Reggie Server <' + configs.smtpSender + '>',
+      to: configs.adminEmails.join(';'),
+      subject: 'Exception!',
+      text: err.toString() + '\n\n' + err.stack
+    };
 
-  smtpTransport.sendMail(mailOptions, function(error, response){
-    if(error){
-        console.log(error);
-    }else{
-        console.log('Message sent: ' + response.message);
-    }
+    smtpTransport.sendMail(mailOptions, function(error, response){
+      if(error){
+          console.log(error);
+      }else{
+          console.log('Message sent: ' + response.message);
+      }
 
-    smtpTransport.close();
+      smtpTransport.close();
 
+      process.exit(1);
+    });
+  }
+  else {
     process.exit(1);
-  });
+  }
 });
+
+fs.readdirSync('red');
