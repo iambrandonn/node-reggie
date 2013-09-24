@@ -1,0 +1,13 @@
+{
+  "publishers": [
+    "npm_username",
+    "npm_username"
+  ],
+  "adminEmails": [
+    "",
+    ""
+  ],
+  "smtpHost": "",
+  "smtpPort": 25,
+  "smtpSender": ""
+}

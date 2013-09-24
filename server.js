@@ -12,13 +12,15 @@ var restify = require('restify'),
   optimist = require('optimist'),
   logger = require('winston');
 
-// Read in the list of users allowed to publish 
-var publisherList = require('./publishers.json').publishers;
+var configs = require('./configs.json');
+
+// The list of users allowed to publish 
+var publisherList = configs.publishers;
 
 // Set up logging
 logger.add(logger.transports.File, {
-  filename: 'reggie.log', 
-  json: false 
+  filename: 'reggie.log',
+  json: false
 });
 
 // ----------------------------------------------------------------------------
@@ -442,3 +444,33 @@ function isPublisher(username) {
   return false;
 }
 
+// If an uncaught exception occurs, email the admins and shutdown the process
+process.on('uncaughtException', function(err) {
+  logger.error('Caught exception: ' + err);
+
+  var nodemailer = require('nodemailer');
+
+  var smtpTransport = nodemailer.createTransport('SMTP', {
+    host: configs.smtpHost,
+    port: configs.smtpPort
+  });
+
+  var mailOptions = {
+    from: 'Reggie Server <' + configs.smtpSender + '>',
+    to: configs.adminEmails.join(';'),
+    subject: 'Exception!',
+    text: err.toString() + '\n\n' + err.stack
+  };
+
+  smtpTransport.sendMail(mailOptions, function(error, response){
+    if(error){
+        console.log(error);
+    }else{
+        console.log('Message sent: ' + response.message);
+    }
+
+    smtpTransport.close();
+
+    process.exit(1);
+  });
+});

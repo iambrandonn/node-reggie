@@ -15,5 +15,3 @@ results
 node_modules
 npm-debug.log
 /test/sandbox/
-
-publishers.json
