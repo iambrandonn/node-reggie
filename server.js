@@ -479,5 +479,3 @@ process.on('uncaughtException', function(err) {
     process.exit(1);
   }
 });
-
-fs.readdirSync('red');
