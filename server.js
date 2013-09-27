@@ -17,12 +17,6 @@ var configs = require('./configs.json');
 // The list of users allowed to publish 
 var publisherList = configs.publishers;
 
-// Set up logging
-logger.add(logger.transports.File, {
-  filename: 'reggie.log',
-  json: false
-});
-
 // ----------------------------------------------------------------------------
 // options parsing
 // ----------------------------------------------------------------------------
@@ -46,6 +40,12 @@ if (argv.h) {
   process.exit(0);
 }
 
+// Set up logging
+mkdirp.sync(path.join(argv.data, 'logs'));
+logger.add(logger.transports.File, {
+  filename: path.join(argv.data, 'logs', 'reggie.log'),
+  json: false
+});
 
 // ----------------------------------------------------------------------------
 // data initialization
