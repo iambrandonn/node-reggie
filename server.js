@@ -96,14 +96,14 @@ server.put('/package/:name/:version', function (req, res, next) {
   fs.writeFile(tempPackageFile, req.body, function(err) {
     if (err) {
       logger.error("Unexpected error when accepting package upload: " + (err.message || err));
-      return res.send(err, 500);
+      return res.send(500, err);
     }
 
     data.loadPackage(tempPackageFile, name, version, function (err) {
       if (err) {
         logger.error("Error loading package from upload: " + (err.message || err));
         fs.unlink(tempPackageFile);
-        return res.send(err, 500);
+        return res.send(500, err);
       }
 
       fs.unlink(tempPackageFile);
@@ -119,7 +119,7 @@ server.del('/package/:name/:version', function (req, res, next) {
   data.deletePackage(name, version, function (err) {
     if (err) {
       logger.error("Error deleting package " + name + "@" + version + ": " + (err.message || err));
-      return res.send(err, 500);
+      return res.send(500, err);
     }
     res.send(200);
   });
@@ -424,12 +424,12 @@ function returnPackageByRange (name, range, res) {
   data.openPackageStream(name, version, function (err, stream) {
     if (err) {
       logger.error("Error streaming package: " + (err.message || err));
-      res.send(err, 500);
+      res.send(500, err);
     }
     stream
       .pipe(res)
       .on('error', function (err) {
-        res.send(err, 500);
+        res.send(500, err);
       });
   });
 }
